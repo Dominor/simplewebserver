@@ -35,6 +35,7 @@ public class SimpleWebServer {
     public void start() {
 
         String line;
+        String nullVariable = null;
         StringBuilder requestBuilder = new StringBuilder();
 
         try {
@@ -51,19 +52,25 @@ public class SimpleWebServer {
 
                 // read line from socket input reader
                 line = inputBufferedReader.readLine();
-                if (!line.isEmpty()) {
+                //System.out.println("Line " + line);
+                if (line != null) {
 
-                    requestBuilder = requestBuilder.append(line);
+                    if (line.isEmpty()) {
 
+                        //System.out.println(requestBuilder.toString());
+                        parseRequestHeaders(requestBuilder.toString());
+                        System.out.println("INFO: Processed request.");
+                        requestBuilder.delete(0, requestBuilder.length());
 
+                        restart();
+
+                    } else {
+                        requestBuilder.append(line + "\r\n");
+                        System.out.println("INFO: Read request line.");
+                    }
                 } else {
-                    System.out.println("INFO: Client closed, exiting");
-                    break;
+                    restart();
                 }
-
-                parseRequestHeaders(requestBuilder.toString());
-                System.out.println("INFO: Processed request ");
-
             }
         } catch (IOException e) {
             System.err.println("ERROR: " + e.getMessage());
@@ -74,26 +81,26 @@ public class SimpleWebServer {
         }
     }
 
+    private void restart() throws IOException {
+
+        closeClient();
+        // block waiting for a client to connect
+        System.out.println("INFO: Waiting for a client connection.");
+        clientSocket = serverSocket.accept();
+
+        // handle client connection
+        System.out.println("INFO: Client accepted: " + clientSocket);
+        setupStreams();
+    }
+
     private String buildResponseHeaders (File resource, byte[] content, StatusCode statusCode) throws IOException {
 
         StringBuilder headers = new StringBuilder();
-        String mimeType = null;
 
-        switch(statusCode) {
-            case OK:
-            case NOT_FOUND:
-
-                headers.append("HTTP/1.1 " + statusCode.getCode() + statusCode + "\r\n");
-                headers.append("Content-Type: " + getFileMimeType(resource) + ((getFileType(resource).equals("text")) ? ";charset=UTF-8 \r\n" : ""));
-                headers.append("Content-Length: " + content.length + "\r\n");
-                headers.append("\r\n");
-                break;
-            default:
-                headers.append("Content-Type: " + getFileMimeType(resource) + ((getFileType(resource).equals("text")) ? ";charset=UTF-8 \r\n" : ""));
-                headers.append("Content-Length: " + content.length + "\r\n");
-                headers.append("\r\n");
-                break;
-        }
+        headers.append("HTTP/1.1 " + statusCode.getCode() + statusCode + "\r\n");
+        headers.append("Content-Type: " + getFileMimeType(resource) + ((getFileType(resource).equals("text")) ? ";charset=UTF-8 \r\n" : "\r\n"));
+        headers.append("Content-Length: " + content.length + "\r\n");
+        headers.append("\r\n");
 
         return headers.toString();
     }
@@ -172,7 +179,6 @@ public class SimpleWebServer {
         try {
             inputBufferedReader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream(), CHARSET));
             outputStream = new DataOutputStream(clientSocket.getOutputStream());
-            // outputStream = new PrintWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
         } catch (IOException e) {
             System.out.println("ERROR: " + e.getMessage());
         }
@@ -187,10 +193,12 @@ public class SimpleWebServer {
 
         byte[] responseInBytes = responseHeaders.getBytes(CHARSET);
 
+        int oldBytesWritten = outputStream.size();
+
         outputStream.write(responseInBytes);
         System.out.println("INFO: Uploading resource: " + resource.getName());
         outputStream.write(content, 0, content.length);
-        System.out.println("INFO: " + (outputStream.size() - responseInBytes.length) + " bytes written.");
+        System.out.println("INFO: " + (outputStream.size() - oldBytesWritten) + " bytes written.");
         outputStream.flush();
     }
 
@@ -212,8 +220,10 @@ public class SimpleWebServer {
             resourcePath = requestLine[1];
             httpVersion = requestLine[2];
 
-            // Remove first "/" from resource path so it doesn't error out
+            // prepend www to every path from the URL
             resourcePath = resourcePath.substring(1);
+            //resourcePath = "www/" + resourcePath;
+
             resource = new File(resourcePath);
 
             switch (httpVerb) {
@@ -234,10 +244,10 @@ public class SimpleWebServer {
     }
 
     /**
-     * Closes the client socket and the buffered input reader
+     * Closes only the client socket
      */
 
-    private void close () {
+    private void closeClient () {
 
         try {
 
@@ -245,6 +255,21 @@ public class SimpleWebServer {
                 System.out.println("INFO: Closing client connection");
                 clientSocket.close();
             }
+
+        } catch (IOException e) {
+            System.out.println("ERROR: Error closing connection " + e.getMessage());
+        }
+    }
+
+    /**
+     * Closes the client socket and the buffered input reader
+     */
+
+    private void close () {
+
+        try {
+
+            closeClient();
 
             if (serverSocket != null) {
                 System.out.println("INFO: Closing server socket");
