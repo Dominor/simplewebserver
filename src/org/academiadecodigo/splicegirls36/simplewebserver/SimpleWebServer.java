@@ -112,11 +112,11 @@ public class SimpleWebServer {
         //content = Files.readAllBytes(Paths.get(resource));
 
         headers.append("HTTP/1.1 200 OK \r\n");
-        // headers.append("Content-Type: text/html; charset=utf-8 \r\n");
-        headers.append("Content-Type: image/jpeg; \r\n");
+        // headers.append("Content-Type: text/html;charset=UTF-8 \r\n");
+        headers.append("Content-Type: image/png \r\n");
         headers.append("Content-Length: " + content.length + "\r\n");
         headers.append("\r\n");
-        headers.append(content);
+        //headers.append(content);
 
         return headers.toString();
     }
