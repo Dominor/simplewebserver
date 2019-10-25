@@ -1,11 +1,10 @@
 package org.academiadecodigo.splicegirls36.simplewebserver;
 
-import java.io.BufferedReader;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 public class SimpleWebServer {
 
@@ -16,6 +15,8 @@ public class SimpleWebServer {
     private ServerSocket serverSocket;
     private BufferedReader inputBufferedReader;
     private DataOutputStream outputStream;
+    // private PrintWriter outputStream;
+    private byte[] content;
 
     public SimpleWebServer(int port) {
 
@@ -67,8 +68,10 @@ public class SimpleWebServer {
                         version = requestLine[2];
 
                         if (verb.equals("GET")) {
-                            response = buildResponseHeaders();
-                            outputStream.writeChars(response);
+                            response = buildResponseHeaders(resource);
+                            outputStream.write(response.getBytes(CHARSET));
+                            outputStream.write(content);
+                            // outputStream.print(response);
                             outputStream.flush();
                         }
                     }
@@ -90,15 +93,16 @@ public class SimpleWebServer {
         }
     }
 
-    private String buildResponseHeaders () {
+    private String buildResponseHeaders (String resource) throws IOException {
 
         StringBuilder headers = new StringBuilder();
 
-        headers.append("HTTP/1.1 200 OK \\r\\n");
-        headers.append("Content-Type: text/html; charset=utf-8 \\r\\n");
-        headers.append("Content-Length: 20 \\r\\n");
-        headers.append("\\r\\n");
-        headers.append("<p> Hello World </p>");
+        content = Files.readAllBytes(Paths.get(resource));
+
+        headers.append("HTTP/1.1 200 OK \r\n");
+        headers.append("Content-Type: text/html; charset=utf-8 \r\n");
+        headers.append("Content-Length: " + content.length + "\r\n");
+        headers.append("\r\n");
 
         return headers.toString();
     }
@@ -112,6 +116,7 @@ public class SimpleWebServer {
         try {
             inputBufferedReader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream(), CHARSET));
             outputStream = new DataOutputStream(clientSocket.getOutputStream());
+            // outputStream = new PrintWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
         } catch (IOException e) {
             System.out.println("ERROR: " + e.getMessage());
         }
