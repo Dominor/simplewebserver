@@ -3,7 +3,8 @@ package org.academiadecodigo.splicegirls36.simplewebserver;
 public enum StatusCode {
 
     OK (200),
-    NOT_FOUND (404);
+    NOT_FOUND (404),
+    NOT_IMPLEMENTED(501);
 
     private int code;
 
@@ -21,8 +22,10 @@ public enum StatusCode {
         switch (this) {
             case OK:
                 return "OK";
+            case NOT_FOUND:
+                return "Not Found";
             default:
-                return "NOT FOUND";
+                return "Not Implemented";
         }
     }
 }

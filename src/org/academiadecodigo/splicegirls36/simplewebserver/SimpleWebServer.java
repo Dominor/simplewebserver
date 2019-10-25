@@ -7,15 +7,14 @@ import java.net.Socket;
 public class SimpleWebServer {
 
     public static String CHARSET = "UTF8";
-    public static int HEADERS_LENGTH = 6;
+
+    public static final File NOT_FOUND_HTML_FILE = new File("www/404.html");
+    public static final File NOT_IMPLEMENTED_FILE = new File("www/501.html");
 
     private Socket clientSocket;
     private ServerSocket serverSocket;
     private BufferedReader inputBufferedReader;
     private DataOutputStream outputStream;
-    // private PrintWriter outputStream;
-    private byte[] content;
-    private File resource = null;
 
     public SimpleWebServer(int port) {
 
@@ -35,7 +34,7 @@ public class SimpleWebServer {
 
     public void start() {
 
-        String line = null;
+        String line;
         StringBuilder requestBuilder = new StringBuilder();
 
         try {
@@ -75,30 +74,31 @@ public class SimpleWebServer {
         }
     }
 
-    private String buildResponseHeaders (StatusCode statusCode) throws IOException {
+    private String buildResponseHeaders (File resource, byte[] content, StatusCode statusCode) throws IOException {
 
         StringBuilder headers = new StringBuilder();
         String mimeType = null;
 
         switch(statusCode) {
             case OK:
+            case NOT_FOUND:
 
                 headers.append("HTTP/1.1 " + statusCode.getCode() + statusCode + "\r\n");
-                headers.append("Content-Type: " + getFileMimeType() + ((getFileType().equals("text")) ? ";charset=UTF-8 \r\n" : ""));
+                headers.append("Content-Type: " + getFileMimeType(resource) + ((getFileType(resource).equals("text")) ? ";charset=UTF-8 \r\n" : ""));
                 headers.append("Content-Length: " + content.length + "\r\n");
                 headers.append("\r\n");
                 break;
-            case NOT_FOUND:
-                headers.append("HTTP/1.1 " + statusCode.getCode() + statusCode + "\r\n");
-                break;
             default:
+                headers.append("Content-Type: " + getFileMimeType(resource) + ((getFileType(resource).equals("text")) ? ";charset=UTF-8 \r\n" : ""));
+                headers.append("Content-Length: " + content.length + "\r\n");
+                headers.append("\r\n");
                 break;
         }
 
         return headers.toString();
     }
 
-    private String getFileMimeType() {
+    private String getFileMimeType(File resource) {
 
         String [] resource_split = resource.getName().split("/");
         String fileName = resource_split[resource_split.length - 1];
@@ -124,33 +124,35 @@ public class SimpleWebServer {
      *
      * @return The file type (text or binary) of the file referenced by the property resource of the type File.
      */
-    private String getFileType() {
+    private String getFileType(File resource) {
 
-        switch (getFileMimeType().split("/")[0]) {
+        switch (getFileMimeType(resource).split("/")[0]) {
 
             case "text":
                 return "text";
-            case "image" :
-                return "binary";
             default:
                 return "binary";
         }
     }
 
-    private byte[] readResource(String path) {
+    private boolean isValidFile (File file) {
 
-        resource = new File(path);
-        BufferedInputStream resourceInput;
-        byte[] fileToBytes = new byte[(int) resource.length()];      // Very dangerous, may result in program breakage if a file too big is specified in the resource url path
+        return file.exists() && file.isFile() && file.canRead();
+    }
+
+    private byte[] readResource(File resource) {
+
+        BufferedInputStream fileInput;
+        byte[] fileToBytes = new byte[(int) resource.length()];      // Dangerous, may result in program breakage if a file too big is specified in the resource url path
         int bytesRead = 0;
 
-        if (!(resource.exists() && resource.isFile() && resource.canRead())) {
+        if (!isValidFile(resource)) {
             System.err.println("ERROR: Resource specified by url path provided in the request not able to be read.");
         }
 
         try {
-            resourceInput = new BufferedInputStream(new FileInputStream(path));
-            bytesRead = resourceInput.read(fileToBytes, 0, fileToBytes.length);
+            fileInput = new BufferedInputStream(new FileInputStream(resource.getPath()));
+            bytesRead = fileInput.read(fileToBytes, 0, fileToBytes.length);
             System.out.println("INFO: " + bytesRead + " bytes read");
 
         } catch (FileNotFoundException e) {
@@ -177,76 +179,58 @@ public class SimpleWebServer {
 
     }
 
+    private void sendResponse (File resource, StatusCode statusCode) throws IOException {
+
+        byte[] content = readResource(resource);
+
+        String responseHeaders = buildResponseHeaders(resource, content, statusCode);
+
+        byte[] responseInBytes = responseHeaders.getBytes(CHARSET);
+
+        outputStream.write(responseInBytes);
+        System.out.println("INFO: Uploading resource: " + resource.getName());
+        outputStream.write(content, 0, content.length);
+        System.out.println("INFO: " + (outputStream.size() - responseInBytes.length) + " bytes written.");
+        outputStream.flush();
+    }
+
     private void parseRequestHeaders (String request) throws IOException {
 
         String[] requestLines = request.split("(\r|\n)");
         String[] requestLine = requestLines[0].split(" ");
         String httpVerb;
-        String resource;
+        String resourcePath;
         String httpVersion;
         String response = null;
-        byte[] responseInBytes = null;
+        File resource = null;
 
         // Currently ignoring all other headers other than the initial request line
         // Only responding to a GET Request
 
         if (requestLine.length == 3) {
             httpVerb = requestLine[0];
-            resource = requestLine[1];
+            resourcePath = requestLine[1];
             httpVersion = requestLine[2];
 
             // Remove first "/" from resource path so it doesn't error out
-            resource = resource.substring(1);
+            resourcePath = resourcePath.substring(1);
+            resource = new File(resourcePath);
 
             switch (httpVerb) {
 
                 case "GET":
-                    content = readResource(resource);
-                    resource = buildResponseHeaders(StatusCode.OK);
-
-                    responseInBytes = resource.getBytes(CHARSET);
-                    outputStream.write(responseInBytes);
-                    System.out.println("INFO: Uploading resource: " + resource);
-                    outputStream.write(content, 0, content.length);
-                    System.out.println("INFO: " + (outputStream.size() - responseInBytes.length) + " bytes written.");
-                    // outputStream.write(content);
-                    // outputStream.print(response);
-                    outputStream.flush();
+                    if (!isValidFile(resource)) {
+                        System.err.println("ERROR: Invalid file. Returning 404 page.");
+                        sendResponse(NOT_FOUND_HTML_FILE, StatusCode.NOT_FOUND);
+                    } else {
+                        sendResponse(resource, StatusCode.OK);
+                    }
                     break;
                 default:
-
+                    System.err.println("ERROR: HTTP Request not yet implemented!");
+                    sendResponse(NOT_IMPLEMENTED_FILE, StatusCode.NOT_IMPLEMENTED);
             }
         }
-
-        /** for (int i = 0; i < requestLines.length; i++) {
-
-            requestLine = line.split(" ");
-
-             // Process Request from the client and return appropriate headers and payload
-
-             if (requestLine.length == 3) {
-             verb = requestLine[0];
-             resource = requestLine[1];
-             version = requestLine[2];
-
-             // Remove first "/" from resource path so it doesn't error out
-             resource = resource.substring(1);
-
-             if (verb.equals("GET")) {
-             content = readResource(resource);
-             response = buildResponseHeaders(resource);
-
-             responseInBytes = response.getBytes(CHARSET);
-             outputStream.write(responseInBytes);
-             System.out.println("INFO: Uploading resource: " + resource);
-             outputStream.write(content, 0, content.length);
-             System.out.println("INFO: " + (outputStream.size() - responseInBytes.length) + " bytes written.");
-             // outputStream.write(content);
-             // outputStream.print(response);
-             outputStream.flush();
-
-             }
-             } */
     }
 
     /**
