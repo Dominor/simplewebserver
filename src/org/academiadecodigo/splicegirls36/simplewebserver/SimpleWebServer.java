@@ -42,6 +42,7 @@ public class SimpleWebServer {
         String resource = null;
         String version = null;
         String response = null;
+        byte[] responseInBytes = null;
 
         try {
 
@@ -67,12 +68,22 @@ public class SimpleWebServer {
                         resource = requestLine[1];
                         version = requestLine[2];
 
+                        // Remove first "/" from resource path so it doesn't error out
+                        resource = resource.substring(1);
+
                         if (verb.equals("GET")) {
+                            content = readResource(resource);
                             response = buildResponseHeaders(resource);
-                            outputStream.write(response.getBytes(CHARSET));
-                            outputStream.write(content);
+
+                            responseInBytes = response.getBytes(CHARSET);
+                            outputStream.write(responseInBytes);
+                            System.out.println("INFO: Uploading resource: " + resource);
+                            outputStream.write(content, 0, content.length);
+                            System.out.println("INFO: " + (outputStream.size() - responseInBytes.length) + " bytes written.");
+                            // outputStream.write(content);
                             // outputStream.print(response);
                             outputStream.flush();
+
                         }
                     }
 
@@ -96,15 +107,42 @@ public class SimpleWebServer {
     private String buildResponseHeaders (String resource) throws IOException {
 
         StringBuilder headers = new StringBuilder();
+        //String content = "<p> Hello World </p>";
 
-        content = Files.readAllBytes(Paths.get(resource));
+        //content = Files.readAllBytes(Paths.get(resource));
 
         headers.append("HTTP/1.1 200 OK \r\n");
-        headers.append("Content-Type: text/html; charset=utf-8 \r\n");
+        // headers.append("Content-Type: text/html; charset=utf-8 \r\n");
+        headers.append("Content-Type: image/jpeg; \r\n");
         headers.append("Content-Length: " + content.length + "\r\n");
         headers.append("\r\n");
+        headers.append(content);
 
         return headers.toString();
+    }
+
+    private byte[] readResource(String path) {
+
+        File file = new File(path);
+        BufferedInputStream resourceInput;
+        byte[] fileToBytes = new byte[(int) file.length()];      // Very dangerous, may result in program breakage if a file too big is specified in the resource url path
+        int bytesRead = 0;
+
+        if (!(file.exists() && file.isFile() && file.canRead())) {
+            System.err.println("ERROR: Resource specified by url path provided in the request not able to be read.");
+        }
+
+        try {
+            resourceInput = new BufferedInputStream(new FileInputStream(path));
+            bytesRead = resourceInput.read(fileToBytes, 0, fileToBytes.length);
+            System.out.println("INFO: " + bytesRead + " bytes read");
+
+        } catch (FileNotFoundException e) {
+            System.err.println("ERROR: " + e.getMessage());
+        } catch (IOException e) {
+            System.err.println("ERROR: " + e.getMessage());
+        }
+        return fileToBytes;
     }
 
     /**
@@ -120,15 +158,6 @@ public class SimpleWebServer {
         } catch (IOException e) {
             System.out.println("ERROR: " + e.getMessage());
         }
-
-    }
-
-    /**
-     * Process the request and return appropriate headers to the response and the requested content
-     */
-
-    private void processRequest () {
-
 
     }
 
