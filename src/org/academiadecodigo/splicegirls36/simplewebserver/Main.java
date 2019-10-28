@@ -13,7 +13,8 @@ public class Main {
                 webServer.start();
             }
         } catch (NumberFormatException e) {
-            System.out.println("Invalid port number " + args[0]);
+            System.out.println("Usage: SimpleWebServer [PORT]");
+            System.exit(1);
         }
     }
 }

@@ -29,6 +29,7 @@ public class SimpleWebServer {
         } catch (IOException e) {
             System.err.println("ERROR: " + e.getMessage());
             close();
+            System.exit(1);
         }
     }
 
@@ -52,7 +53,6 @@ public class SimpleWebServer {
 
                 // read line from socket input reader
                 line = inputBufferedReader.readLine();
-                //System.out.println("Line " + line);
                 if (line != null) {
 
                     if (line.isEmpty()) {
